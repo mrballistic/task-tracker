@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import TaskCard from './TaskCard';
 import { Task, StatusLabels, PriorityLabels } from '@/types/task';
+import { useCategories } from '@/contexts/CategoryContext';
 import useSWR from 'swr';
 
 // Fetcher function for SWR
@@ -30,9 +31,13 @@ const fetcher = async (url: string) => {
 };
 
 export default function TaskList() {
+  // Get categories from context
+  const { categories, getCategoryColor } = useCategories();
+  
   // State for filters
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [priorityFilter, setPriorityFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [page, setPage] = useState(1);
   const tasksPerPage = 5;
@@ -71,6 +76,11 @@ export default function TaskList() {
 
   const handlePriorityFilterChange = (event: SelectChangeEvent<string>) => {
     setPriorityFilter(event.target.value);
+    setPage(1); // Reset to first page when filter changes
+  };
+
+  const handleCategoryFilterChange = (event: SelectChangeEvent<string>) => {
+    setCategoryFilter(event.target.value);
     setPage(1); // Reset to first page when filter changes
   };
 
@@ -121,13 +131,20 @@ export default function TaskList() {
     }
   };
 
-  // Filter tasks by search term
+  // Filter tasks by search term and category
   const filteredTasks = data
-    ? data.filter((task) => 
-        task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (task.category && task.category.toLowerCase().includes(searchTerm.toLowerCase()))
-      )
+    ? data.filter((task) => {
+        // Text search filter
+        const matchesSearch = 
+          task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (task.category && task.category.toLowerCase().includes(searchTerm.toLowerCase()));
+          
+        // Category filter
+        const matchesCategory = !categoryFilter || task.category === categoryFilter;
+        
+        return matchesSearch && matchesCategory;
+      })
     : [];
 
   // Pagination
@@ -149,7 +166,7 @@ export default function TaskList() {
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} md={6}>
             <TextField
               fullWidth
               label="Search tasks"
@@ -159,35 +176,69 @@ export default function TaskList() {
               placeholder="Search by title, description, or category"
             />
           </Grid>
-          <Grid item xs={12} sm={4}>
-            <FormControl fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={handleStatusFilterChange}
-                label="Status"
-              >
-                <MenuItem value="">All</MenuItem>
-                {Object.entries(StatusLabels).map(([value, label]) => (
-                  <MenuItem key={value} value={value}>{label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <FormControl fullWidth>
-              <InputLabel>Priority</InputLabel>
-              <Select
-                value={priorityFilter}
-                onChange={handlePriorityFilterChange}
-                label="Priority"
-              >
-                <MenuItem value="">All</MenuItem>
-                {Object.entries(PriorityLabels).map(([value, label]) => (
-                  <MenuItem key={value} value={value}>{label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+          <Grid item xs={12} md={6}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={statusFilter}
+                    onChange={handleStatusFilterChange}
+                    label="Status"
+                  >
+                    <MenuItem value="">All</MenuItem>
+                    {Object.entries(StatusLabels).map(([value, label]) => (
+                      <MenuItem key={value} value={value}>{label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Priority</InputLabel>
+                  <Select
+                    value={priorityFilter}
+                    onChange={handlePriorityFilterChange}
+                    label="Priority"
+                  >
+                    <MenuItem value="">All</MenuItem>
+                    {Object.entries(PriorityLabels).map(([value, label]) => (
+                      <MenuItem key={value} value={value}>{label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Category</InputLabel>
+                  <Select
+                    value={categoryFilter}
+                    onChange={handleCategoryFilterChange}
+                    label="Category"
+                  >
+                    <MenuItem value="">All Categories</MenuItem>
+                    {categories.map((category) => (
+                      <MenuItem key={category.name} value={category.name}>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Box 
+                            component="span" 
+                            sx={{ 
+                              display: 'inline-block',
+                              width: 12,
+                              height: 12,
+                              borderRadius: '50%',
+                              mr: 1,
+                              backgroundColor: category.color
+                            }}
+                          />
+                          {category.name}
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
           </Grid>
         </Grid>
       </Paper>

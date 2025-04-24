@@ -13,13 +13,15 @@ import {
   Typography, 
   Paper,
   FormHelperText,
-  Chip,
-  SelectChangeEvent
+  SelectChangeEvent,
+  Autocomplete
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { Task, TaskFormData, StatusLabels, PriorityLabels } from '@/types/task';
+import { useCategories } from '@/contexts/CategoryContext';
+import TagInput from '@/components/tags/TagInput';
 
 interface TaskFormProps {
   initialData?: Task;
@@ -28,6 +30,8 @@ interface TaskFormProps {
 }
 
 export default function TaskForm({ initialData, onSubmit, isLoading = false }: TaskFormProps) {
+  const { categories, getCategoryColor, addCategory } = useCategories();
+  
   const [formData, setFormData] = useState<TaskFormData>({
     title: initialData?.title || '',
     description: initialData?.description || '',
@@ -71,6 +75,16 @@ export default function TaskForm({ initialData, onSubmit, isLoading = false }: T
     setFormData(prev => ({ ...prev, dueDate: date }));
   };
 
+  // Handle category change
+  const handleCategoryChange = (event: React.SyntheticEvent, value: string | null) => {
+    setFormData(prev => ({ ...prev, category: value || '' }));
+  };
+
+  // Handle tag change
+  const handleTagsChange = (value: string) => {
+    setFormData(prev => ({ ...prev, tags: value }));
+  };
+
   // Validate the form
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -87,9 +101,29 @@ export default function TaskForm({ initialData, onSubmit, isLoading = false }: T
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    // If a new category is entered, add it to the category context
+    if (formData.category && 
+        !categories.some(cat => cat.name === formData.category)) {
+      addCategory({
+        name: formData.category,
+        color: generateRandomColor()
+      });
+    }
+
     if (validateForm()) {
       onSubmit(formData);
     }
+  };
+
+  // Generate a random color for new categories
+  const generateRandomColor = (): string => {
+    const colors = [
+      '#4caf50', '#2196f3', '#f44336', '#ff9800', 
+      '#9c27b0', '#795548', '#009688', '#607d8b',
+      '#e91e63', '#673ab7', '#3f51b5', '#00bcd4',
+      '#cddc39', '#8bc34a', '#ffc107', '#ff5722'
+    ];
+    return colors[Math.floor(Math.random() * colors.length)];
   };
 
   return (
@@ -179,33 +213,44 @@ export default function TaskForm({ initialData, onSubmit, isLoading = false }: T
           </Grid>
           
           <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Category (Optional)"
-              name="category"
-              value={formData.category || ''}
-              onChange={handleChange}
+            <Autocomplete
+              freeSolo
+              options={categories.map(cat => cat.name)}
+              value={formData.category || null}
+              onChange={handleCategoryChange}
               disabled={isLoading}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Category (Optional)"
+                  fullWidth
+                />
+              )}
+              renderOption={(props, option) => (
+                <li {...props}>
+                  <Box 
+                    component="span" 
+                    sx={{ 
+                      display: 'inline-block',
+                      width: 14,
+                      height: 14,
+                      borderRadius: '50%',
+                      mr: 1,
+                      backgroundColor: getCategoryColor(option)
+                    }}
+                  />
+                  {option}
+                </li>
+              )}
             />
           </Grid>
           
           <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Tags (Optional, comma separated)"
-              name="tags"
+            <TagInput
               value={formData.tags || ''}
-              onChange={handleChange}
-              placeholder="work, personal, urgent"
+              onChange={handleTagsChange}
               disabled={isLoading}
             />
-            {formData.tags && (
-              <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                {formData.tags.split(',').map((tag, index) => (
-                  <Chip key={index} label={tag.trim()} size="small" />
-                ))}
-              </Box>
-            )}
           </Grid>
           
           <Grid item xs={12} sx={{ mt: 2 }}>

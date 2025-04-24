@@ -16,9 +16,11 @@ import {
   Edit as EditIcon, 
   Delete as DeleteIcon,
   MoreVert as MoreIcon,
-  Flag as FlagIcon
+  Flag as FlagIcon,
+  Label as LabelIcon
 } from '@mui/icons-material';
 import { Task, PriorityLabels, StatusLabels } from '@/types/task';
+import { useCategories } from '@/contexts/CategoryContext';
 import { format } from 'date-fns';
 
 interface TaskCardProps {
@@ -31,6 +33,7 @@ interface TaskCardProps {
 export default function TaskCard({ task, onEdit, onDelete, onStatusChange }: TaskCardProps) {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
+  const { getCategoryColor } = useCategories();
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -75,6 +78,12 @@ export default function TaskCard({ task, onEdit, onDelete, onStatusChange }: Tas
     } catch (error) {
       return 'Invalid date';
     }
+  };
+
+  // Get tags as array
+  const getTags = (): string[] => {
+    if (!task.tags) return [];
+    return task.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
   };
 
   return (
@@ -139,10 +148,35 @@ export default function TaskCard({ task, onEdit, onDelete, onStatusChange }: Tas
           {task.category && (
             <Chip 
               size="small"
-              label={task.category} 
+              icon={<LabelIcon />}
+              label={task.category}
+              sx={{
+                bgcolor: `${getCategoryColor(task.category)}20`,
+                color: getCategoryColor(task.category),
+                borderColor: getCategoryColor(task.category),
+                '& .MuiChip-icon': {
+                  color: getCategoryColor(task.category)
+                }
+              }}
+              variant="outlined"
             />
           )}
         </Box>
+
+        {/* Display tags if present */}
+        {task.tags && (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+            {getTags().map((tag, index) => (
+              <Chip
+                key={index}
+                label={tag}
+                size="small"
+                variant="outlined"
+                sx={{ fontSize: '0.75rem' }}
+              />
+            ))}
+          </Box>
+        )}
       </CardContent>
       <CardActions sx={{ display: 'flex', justifyContent: 'flex-end' }}>
         {onEdit && (
