@@ -6,21 +6,27 @@
 - Database schema defined in Prisma
 - Project structure established
 - Prisma client singleton created
-
-## What's Left to Build
 - API routes for CRUD operations
-- Task list UI components
+- Task list UI components with filtering and sorting
 - Task creation and edit forms
-- Filtering and sorting capabilities
-- Task status management
-- Category management
+- Task status management UI
 - Priority level implementation
 - Due date tracking
-- Dark/light mode toggle
-- Responsive design adjustments
+- Dark/light mode toggle with theme persistence
+- Dashboard page with task statistics and highlights
+
+## What's Left to Build
+- Category management improvements
+- Task tagging system enhancements
+- Additional filtering options
+- Responsive design refinements
+- Unit and integration tests
+- Performance optimizations
 
 ## Current Status
-Project is in the initial setup phase. The foundation has been laid with the basic project structure, database schema, and UI library configuration. Ready to begin implementation of core functionality.
+Project has progressed from initial setup to having a functional UI. The core features are now implemented including task management, filtering, theme support, and a dashboard view. The application now supports all CRUD operations via the API and provides a complete interface for managing tasks.
 
 ## Known Issues
-- None at this stage, as implementation has not yet begun
+- Need to validate API calls in production environment
+- Form validation could be enhanced
+- Need to add proper error boundaries for error handling

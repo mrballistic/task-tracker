@@ -1,95 +1,189 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+'use client';
 
-export default function Home() {
+import React from 'react';
+import { 
+  Box, 
+  Typography, 
+  Grid, 
+  Paper, 
+  Button,
+  CircularProgress,
+  Card,
+  CardContent,
+  Alert
+} from '@mui/material';
+import Link from 'next/link';
+import useSWR from 'swr';
+import { Add as AddIcon } from '@mui/icons-material';
+import { Task } from '@/types/task';
+import AppLayout from '@/components/layout/AppLayout';
+import TaskCard from '@/components/tasks/TaskCard';
+
+// Fetcher function for SWR
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error('Failed to fetch tasks');
+  }
+  return res.json();
+};
+
+export default function HomePage() {
+  const { data: tasks, error, isLoading } = useSWR<Task[]>('/api/tasks', fetcher);
+  
+  // Group tasks by status
+  const todoTasks = tasks?.filter(task => task.status === 'TODO') || [];
+  const inProgressTasks = tasks?.filter(task => task.status === 'IN_PROGRESS') || [];
+  const doneTasks = tasks?.filter(task => task.status === 'DONE') || [];
+  
+  // Get high priority tasks
+  const highPriorityTasks = tasks?.filter(task => task.priority === 1) || [];
+  
+  // Get tasks due soon (within the next 3 days)
+  const today = new Date();
+  const threeDaysLater = new Date(today);
+  threeDaysLater.setDate(today.getDate() + 3);
+  
+  const tasksDueSoon = tasks?.filter(task => {
+    if (!task.dueDate) return false;
+    const dueDate = new Date(task.dueDate);
+    return dueDate >= today && dueDate <= threeDaysLater;
+  }) || [];
+
+  // Calculate task statistics
+  const totalTasks = tasks?.length || 0;
+  const completionRate = totalTasks > 0 ? Math.round((doneTasks.length / totalTasks) * 100) : 0;
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>src/app/page.tsx</code>.
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <AppLayout>
+      <Box sx={{ mb: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h4" component="h1">
+            Task Dashboard
+          </Typography>
+          <Button 
+            variant="contained" 
+            color="primary" 
+            startIcon={<AddIcon />}
+            component={Link}
+            href="/tasks/new"
+          >
+            New Task
+          </Button>
+        </Box>
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        {isLoading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+            <CircularProgress />
+          </Box>
+        )}
+
+        {error && (
+          <Alert severity="error" sx={{ my: 2 }}>
+            Error loading tasks. Please try refreshing the page.
+          </Alert>
+        )}
+
+        {!isLoading && !error && (
+          <>
+            {/* Task Statistics */}
+            <Grid container spacing={3} sx={{ mb: 4 }}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper elevation={2} sx={{ p: 2, textAlign: 'center', height: '100%' }}>
+                  <Typography variant="h6" color="text.secondary">Total Tasks</Typography>
+                  <Typography variant="h3">{totalTasks}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper elevation={2} sx={{ p: 2, textAlign: 'center', height: '100%' }}>
+                  <Typography variant="h6" color="text.secondary">To Do</Typography>
+                  <Typography variant="h3">{todoTasks.length}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper elevation={2} sx={{ p: 2, textAlign: 'center', height: '100%' }}>
+                  <Typography variant="h6" color="text.secondary">In Progress</Typography>
+                  <Typography variant="h3">{inProgressTasks.length}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper elevation={2} sx={{ p: 2, textAlign: 'center', height: '100%' }}>
+                  <Typography variant="h6" color="text.secondary">Completion Rate</Typography>
+                  <Typography variant="h3">{completionRate}%</Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            <Grid container spacing={3}>
+              {/* High Priority Tasks */}
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, height: '100%' }}>
+                  <Typography variant="h6" sx={{ mb: 2 }}>
+                    High Priority Tasks {highPriorityTasks.length > 0 && `(${highPriorityTasks.length})`}
+                  </Typography>
+                  
+                  {highPriorityTasks.length === 0 ? (
+                    <Alert severity="info">No high priority tasks</Alert>
+                  ) : (
+                    <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
+                      {highPriorityTasks.slice(0, 3).map(task => (
+                        <TaskCard 
+                          key={task.id} 
+                          task={task} 
+                          onEdit={(task) => window.location.href = `/tasks/${task.id}/edit`}
+                        />
+                      ))}
+                      {highPriorityTasks.length > 3 && (
+                        <Button 
+                          component={Link} 
+                          href="/tasks" 
+                          fullWidth 
+                          sx={{ mt: 1 }}
+                        >
+                          View All High Priority Tasks
+                        </Button>
+                      )}
+                    </Box>
+                  )}
+                </Paper>
+              </Grid>
+
+              {/* Due Soon Tasks */}
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, height: '100%' }}>
+                  <Typography variant="h6" sx={{ mb: 2 }}>
+                    Due Soon {tasksDueSoon.length > 0 && `(${tasksDueSoon.length})`}
+                  </Typography>
+                  
+                  {tasksDueSoon.length === 0 ? (
+                    <Alert severity="info">No tasks due in the next 3 days</Alert>
+                  ) : (
+                    <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
+                      {tasksDueSoon.slice(0, 3).map(task => (
+                        <TaskCard 
+                          key={task.id} 
+                          task={task}
+                          onEdit={(task) => window.location.href = `/tasks/${task.id}/edit`}
+                        />
+                      ))}
+                      {tasksDueSoon.length > 3 && (
+                        <Button 
+                          component={Link} 
+                          href="/tasks" 
+                          fullWidth 
+                          sx={{ mt: 1 }}
+                        >
+                          View All Upcoming Tasks
+                        </Button>
+                      )}
+                    </Box>
+                  )}
+                </Paper>
+              </Grid>
+            </Grid>
+          </>
+        )}
+      </Box>
+    </AppLayout>
   );
 }
