@@ -1,36 +1,217 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
-// Define a type for category with color
+// Standard set of category colors for consistent visual identification
+const CATEGORY_COLORS = [
+  '#3f51b5', // indigo
+  '#f50057', // pink
+  '#00bcd4', // cyan
+  '#4caf50', // green
+  '#ff9800', // orange
+  '#9c27b0', // purple
+  '#f44336', // red
+  '#2196f3', // blue
+  '#ff5722', // deep orange
+  '#607d8b'  // blue grey
+];
+
 export interface Category {
   name: string;
   color: string;
+  count?: number;
 }
 
-// Default categories with color assignments
-const defaultCategories: Category[] = [
-  { name: 'Work', color: '#4caf50' },
-  { name: 'Personal', color: '#2196f3' },
-  { name: 'Health', color: '#f44336' },
-  { name: 'Finance', color: '#ff9800' },
-  { name: 'Learning', color: '#9c27b0' },
-  { name: 'Home', color: '#795548' },
-  { name: 'Travel', color: '#009688' },
-];
-
-// Define the context type
 interface CategoryContextType {
   categories: Category[];
-  addCategory: (category: Category) => void;
-  getCategoryColor: (categoryName: string | null | undefined) => string;
-  getAllCategories: () => Category[];
+  addCategory: (name: string, color?: string) => void;
+  updateCategory: (oldName: string, newName: string, newColor?: string) => void;
+  deleteCategory: (name: string) => void;
+  getCategoryColor: (name: string) => string;
+  isCategoryUsed: (name: string) => boolean;
 }
 
-// Create the context
 const CategoryContext = createContext<CategoryContextType | undefined>(undefined);
 
-// Custom hook to use the category context
+// Generate a consistent color based on category name
+const getColorForCategory = (categoryName: string): string => {
+  // Use a simple hash function to always get the same color for the same category name
+  const hash = categoryName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return CATEGORY_COLORS[hash % CATEGORY_COLORS.length];
+};
+
+export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  // Fetch all categories from tasks on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('/api/tasks');
+        if (!response.ok) throw new Error('Failed to fetch tasks');
+        
+        const tasks = await response.json();
+        
+        // Extract unique categories and count occurrences
+        const categoryMap = new Map<string, { color: string, count: number }>();
+        
+        tasks.forEach((task: any) => {
+          if (task.category) {
+            const categoryData = task.category.includes(':') 
+              ? task.category.split(':') 
+              : [task.category, ''];
+            
+            const [name, color] = categoryData;
+            
+            if (categoryMap.has(name)) {
+              const current = categoryMap.get(name)!;
+              categoryMap.set(name, {
+                color: current.color || color || getColorForCategory(name),
+                count: current.count + 1
+              });
+            } else {
+              categoryMap.set(name, {
+                color: color || getColorForCategory(name),
+                count: 1
+              });
+            }
+          }
+        });
+        
+        // Convert to array of Category objects
+        const categoryList: Category[] = Array.from(categoryMap).map(([name, data]) => ({
+          name,
+          color: data.color,
+          count: data.count
+        }));
+        
+        setCategories(categoryList);
+      } catch (error) {
+        console.error('Failed to fetch categories:', error);
+      }
+    };
+    
+    fetchCategories();
+  }, []);
+
+  // Add a new category
+  const addCategory = useCallback((name: string, color?: string) => {
+    const trimmedName = name.trim();
+    if (!trimmedName || categories.some(cat => cat.name === trimmedName)) return;
+    
+    setCategories(prev => [
+      ...prev, 
+      { 
+        name: trimmedName, 
+        color: color || getColorForCategory(trimmedName),
+        count: 0
+      }
+    ]);
+  }, [categories]);
+
+  // Update an existing category
+  const updateCategory = useCallback(async (oldName: string, newName: string, newColor?: string) => {
+    const trimmedNewName = newName.trim();
+    if (!trimmedNewName) return;
+    
+    // Update the category in our local state
+    setCategories(prev => prev.map(cat => 
+      cat.name === oldName 
+        ? { ...cat, name: trimmedNewName, color: newColor || cat.color }
+        : cat
+    ));
+    
+    // Update category in all tasks that use it
+    try {
+      const response = await fetch('/api/tasks');
+      if (!response.ok) throw new Error('Failed to fetch tasks');
+      const tasks = await response.json();
+      
+      // Find all tasks using this category
+      const tasksToUpdate = tasks.filter((task: any) => {
+        const categoryData = task.category?.includes(':') 
+          ? task.category.split(':')[0] 
+          : task.category;
+        return categoryData === oldName;
+      });
+      
+      // Update each task with the new category name and color
+      for (const task of tasksToUpdate) {
+        await fetch(`/api/tasks/${task.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...task,
+            category: `${trimmedNewName}:${newColor || getColorForCategory(trimmedNewName)}`
+          })
+        });
+      }
+    } catch (error) {
+      console.error('Failed to update category in tasks:', error);
+    }
+  }, []);
+
+  // Delete a category
+  const deleteCategory = useCallback(async (name: string) => {
+    // Remove from local state
+    setCategories(prev => prev.filter(cat => cat.name !== name));
+    
+    // Update tasks that use this category (set to null)
+    try {
+      const response = await fetch('/api/tasks');
+      if (!response.ok) throw new Error('Failed to fetch tasks');
+      const tasks = await response.json();
+      
+      // Find all tasks using this category
+      const tasksToUpdate = tasks.filter((task: any) => {
+        const categoryData = task.category?.includes(':') 
+          ? task.category.split(':')[0] 
+          : task.category;
+        return categoryData === name;
+      });
+      
+      // Update each task to remove the category
+      for (const task of tasksToUpdate) {
+        await fetch(`/api/tasks/${task.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...task,
+            category: null
+          })
+        });
+      }
+    } catch (error) {
+      console.error('Failed to remove category from tasks:', error);
+    }
+  }, []);
+
+  // Get color for a category
+  const getCategoryColor = useCallback((name: string): string => {
+    const category = categories.find(cat => cat.name === name);
+    return category ? category.color : getColorForCategory(name);
+  }, [categories]);
+
+  // Check if a category is being used
+  const isCategoryUsed = useCallback((name: string): boolean => {
+    const category = categories.find(cat => cat.name === name);
+    return category ? (category.count || 0) > 0 : false;
+  }, [categories]);
+
+  return (
+    <CategoryContext.Provider value={{ 
+      categories, 
+      addCategory, 
+      updateCategory, 
+      deleteCategory,
+      getCategoryColor,
+      isCategoryUsed
+    }}>
+      {children}
+    </CategoryContext.Provider>
+  );
+};
+
 export const useCategories = () => {
   const context = useContext(CategoryContext);
   if (context === undefined) {
@@ -38,61 +219,3 @@ export const useCategories = () => {
   }
   return context;
 };
-
-// Props for the category provider
-interface CategoryProviderProps {
-  children: ReactNode;
-}
-
-// The category provider component
-export default function CategoryProvider({ children }: CategoryProviderProps) {
-  // Initialize categories state with default categories
-  const [categories, setCategories] = useState<Category[]>(() => {
-    // On the client side, try to get saved categories from localStorage
-    if (typeof window !== 'undefined') {
-      const savedCategories = localStorage.getItem('taskTrackerCategories');
-      return savedCategories ? JSON.parse(savedCategories) : defaultCategories;
-    }
-    return defaultCategories;
-  });
-
-  // Save categories to localStorage whenever they change
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('taskTrackerCategories', JSON.stringify(categories));
-    }
-  }, [categories]);
-
-  // Add a new category if it doesn't already exist
-  const addCategory = (newCategory: Category) => {
-    if (!categories.some(cat => cat.name === newCategory.name)) {
-      setCategories(prevCategories => [...prevCategories, newCategory]);
-    }
-  };
-
-  // Get the color for a given category name
-  const getCategoryColor = (categoryName: string | null | undefined): string => {
-    if (!categoryName) return '#757575'; // Default gray for no category
-    
-    const category = categories.find(cat => cat.name === categoryName);
-    return category ? category.color : '#757575';
-  };
-
-  // Get all categories
-  const getAllCategories = (): Category[] => {
-    return categories;
-  };
-
-  return (
-    <CategoryContext.Provider
-      value={{
-        categories,
-        addCategory,
-        getCategoryColor,
-        getAllCategories,
-      }}
-    >
-      {children}
-    </CategoryContext.Provider>
-  );
-}
