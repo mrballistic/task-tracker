@@ -10,18 +10,32 @@ import {
   IconButton, 
   CardActions,
   Menu,
-  MenuItem 
+  MenuItem,
+  Divider,
+  useMediaQuery,
+  Badge,
+  Collapse,
+  Button,
+  Tooltip,
+  Avatar
 } from '@mui/material';
 import { 
   Edit as EditIcon, 
   Delete as DeleteIcon,
   MoreVert as MoreIcon,
   Flag as FlagIcon,
-  Label as LabelIcon
+  Label as LabelIcon,
+  CalendarToday as CalendarIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  Check as CheckIcon,
+  PlayArrow as PlayArrowIcon,
+  Assignment as AssignmentIcon,
 } from '@mui/icons-material';
 import { Task, PriorityLabels, StatusLabels } from '@/types/task';
 import { useCategories } from '@/contexts/CategoryContext';
-import { format } from 'date-fns';
+import { format, isAfter, isBefore, isToday, isTomorrow } from 'date-fns';
+import { useTheme } from '@mui/material/styles';
 
 interface TaskCardProps {
   task: Task;
@@ -32,10 +46,15 @@ interface TaskCardProps {
 
 export default function TaskCard({ task, onEdit, onDelete, onStatusChange }: TaskCardProps) {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [expanded, setExpanded] = React.useState(false);
   const open = Boolean(anchorEl);
   const { getCategoryColor } = useCategories();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
     setAnchorEl(event.currentTarget);
   };
 
@@ -48,6 +67,10 @@ export default function TaskCard({ task, onEdit, onDelete, onStatusChange }: Tas
       onStatusChange(task.id, status);
     }
     handleClose();
+  };
+
+  const handleExpandClick = () => {
+    setExpanded(!expanded);
   };
   
   // Get priority color
@@ -70,14 +93,42 @@ export default function TaskCard({ task, onEdit, onDelete, onStatusChange }: Tas
     }
   };
 
+  // Get status icon
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'TODO': return <AssignmentIcon fontSize="small" />;
+      case 'IN_PROGRESS': return <PlayArrowIcon fontSize="small" />;
+      case 'DONE': return <CheckIcon fontSize="small" />;
+      default: return <AssignmentIcon fontSize="small" />;
+    }
+  };
+
   // Format date for display
   const formatDate = (dateString?: Date | string | null) => {
     if (!dateString) return 'No due date';
     try {
-      return format(new Date(dateString), 'MMM d, yyyy');
+      const date = new Date(dateString);
+      
+      if (isToday(date)) {
+        return 'Today';
+      } else if (isTomorrow(date)) {
+        return 'Tomorrow';
+      } else {
+        return format(date, 'MMM d, yyyy');
+      }
     } catch (error) {
       return 'Invalid date';
     }
+  };
+
+  // Check if the task is overdue
+  const isOverdue = () => {
+    if (!task.dueDate) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(task.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+    return isBefore(dueDate, today) && task.status !== 'DONE';
   };
 
   // Get tags as array
@@ -86,14 +137,64 @@ export default function TaskCard({ task, onEdit, onDelete, onStatusChange }: Tas
     return task.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
   };
 
+  // Determine if we show all content or only the most important on mobile
+  const shouldCollapseContent = isMobile && task.description && task.description.length > 100;
+
   return (
-    <Card sx={{ mb: 2, boxShadow: 2 }}>
-      <CardContent>
+    <Card 
+      sx={{ 
+        mb: 2, 
+        boxShadow: 2,
+        transition: 'transform 0.2s, box-shadow 0.2s',
+        '&:hover': {
+          boxShadow: 3,
+          transform: 'translateY(-2px)'
+        },
+        borderLeft: task.status === 'DONE' ? '4px solid #4caf50' :
+                   task.status === 'IN_PROGRESS' ? '4px solid #ff9800' :
+                   '4px solid #f44336',
+      }}
+    >
+      <CardContent 
+        sx={{ 
+          pb: 1,
+          pt: 2,
+          px: { xs: 2, sm: 3 }
+        }}
+      >
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-          <Typography variant="h6" component="div" sx={{ wordBreak: 'break-word' }}>
-            {task.title}
-          </Typography>
-          <IconButton size="small" onClick={handleMenuClick}>
+          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+            <Avatar 
+              sx={{ 
+                bgcolor: getStatusColor(task.status) as string + '.main',
+                width: 28,
+                height: 28,
+                mr: 1.5,
+                display: { xs: 'none', sm: 'flex' },
+              }}
+            >
+              {getStatusIcon(task.status)}
+            </Avatar>
+            <Typography 
+              variant={isMobile ? "subtitle1" : "h6"} 
+              component="div" 
+              sx={{ 
+                wordBreak: 'break-word',
+                width: '100%',
+                textDecoration: task.status === 'DONE' ? 'line-through' : 'none',
+                color: task.status === 'DONE' ? 'text.secondary' : 'text.primary',
+                fontWeight: task.status === 'DONE' ? 'normal' : 'medium',
+              }}
+            >
+              {task.title}
+            </Typography>
+          </Box>
+          <IconButton 
+            size="small" 
+            onClick={handleMenuClick}
+            sx={{ ml: 1, flexShrink: 0 }}
+            aria-label="options"
+          >
             <MoreIcon />
           </IconButton>
           <Menu
@@ -118,18 +219,27 @@ export default function TaskCard({ task, onEdit, onDelete, onStatusChange }: Tas
             <MenuItem disabled={task.status === 'DONE'} onClick={() => handleStatusChange('DONE')}>
               Mark as Done
             </MenuItem>
+            <Divider />
+            {onEdit && (
+              <MenuItem onClick={() => onEdit(task)}>
+                <EditIcon fontSize="small" sx={{ mr: 1 }} />
+                Edit Task
+              </MenuItem>
+            )}
+            {onDelete && (
+              <MenuItem onClick={() => onDelete(task.id)}>
+                <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+                Delete Task
+              </MenuItem>
+            )}
           </Menu>
         </Box>
         
-        {task.description && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, whiteSpace: 'pre-wrap' }}>
-            {task.description}
-          </Typography>
-        )}
-        
+        {/* Primary task information - visible on all screen sizes */}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
           <Chip 
             size="small" 
+            icon={getStatusIcon(task.status)}
             color={getStatusColor(task.status) as any}
             label={StatusLabels[task.status]} 
           />
@@ -137,14 +247,8 @@ export default function TaskCard({ task, onEdit, onDelete, onStatusChange }: Tas
             size="small"
             icon={<FlagIcon />} 
             color={getPriorityColor(task.priority) as any}
-            label={`Priority: ${PriorityLabels[task.priority]}`} 
+            label={PriorityLabels[task.priority]} 
           />
-          {task.dueDate && (
-            <Chip 
-              size="small"
-              label={`Due: ${formatDate(task.dueDate)}`} 
-            />
-          )}
           {task.category && (
             <Chip 
               size="small"
@@ -161,34 +265,144 @@ export default function TaskCard({ task, onEdit, onDelete, onStatusChange }: Tas
               variant="outlined"
             />
           )}
-        </Box>
-
-        {/* Display tags if present */}
-        {task.tags && (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
-            {getTags().map((tag, index) => (
-              <Chip
-                key={index}
-                label={tag}
+          {task.dueDate && (
+            <Tooltip title={isOverdue() ? "Overdue!" : ""}>
+              <Chip 
                 size="small"
-                variant="outlined"
-                sx={{ fontSize: '0.75rem' }}
+                icon={<CalendarIcon />}
+                label={formatDate(task.dueDate)}
+                color={isOverdue() ? 'error' : 'default'}
+                sx={isOverdue() ? { fontWeight: 'bold' } : {}}
               />
-            ))}
-          </Box>
+            </Tooltip>
+          )}
+        </Box>
+        
+        {/* Description and tags that might be collapsed on mobile */}
+        {shouldCollapseContent ? (
+          <>
+            <Collapse in={expanded} timeout="auto" unmountOnExit>
+              {task.description && (
+                <Typography variant="body2" color="text.secondary" sx={{ my: 2, whiteSpace: 'pre-wrap' }}>
+                  {task.description}
+                </Typography>
+              )}
+              
+              {/* Display tags if present */}
+              {getTags().length > 0 && (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+                  {getTags().map((tag, index) => (
+                    <Chip
+                      key={index}
+                      label={tag}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontSize: '0.75rem' }}
+                    />
+                  ))}
+                </Box>
+              )}
+            </Collapse>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+              <Button
+                size="small"
+                onClick={handleExpandClick}
+                endIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              >
+                {expanded ? "Show Less" : "Show More"}
+              </Button>
+            </Box>
+          </>
+        ) : (
+          <>
+            {task.description && (
+              <Typography variant="body2" color="text.secondary" sx={{ my: 2, whiteSpace: 'pre-wrap' }}>
+                {task.description}
+              </Typography>
+            )}
+            
+            {/* Display tags if present */}
+            {getTags().length > 0 && (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+                {getTags().map((tag, index) => (
+                  <Chip
+                    key={index}
+                    label={tag}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontSize: '0.75rem' }}
+                  />
+                ))}
+              </Box>
+            )}
+          </>
         )}
       </CardContent>
-      <CardActions sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-        {onEdit && (
-          <IconButton size="small" onClick={() => onEdit(task)} aria-label="edit">
-            <EditIcon />
-          </IconButton>
-        )}
-        {onDelete && (
-          <IconButton size="small" onClick={() => onDelete(task.id)} aria-label="delete">
-            <DeleteIcon />
-          </IconButton>
-        )}
+      
+      {/* Action buttons */}
+      <CardActions sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between',
+        px: { xs: 1, sm: 2 },
+        py: 1
+      }}>
+        <Box>
+          {/* Quick status change buttons */}
+          {!isMobile && (
+            <>
+              {task.status !== 'DONE' && (
+                <Tooltip title="Mark as Done">
+                  <IconButton 
+                    size="small" 
+                    color="success"
+                    onClick={() => handleStatusChange('DONE')}
+                  >
+                    <CheckIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {task.status !== 'IN_PROGRESS' && task.status !== 'DONE' && (
+                <Tooltip title="Mark as In Progress">
+                  <IconButton 
+                    size="small"
+                    color="warning"
+                    onClick={() => handleStatusChange('IN_PROGRESS')}
+                  >
+                    <PlayArrowIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {task.status !== 'TODO' && task.status !== 'DONE' && (
+                <Tooltip title="Mark as To Do">
+                  <IconButton 
+                    size="small"
+                    color="error"
+                    onClick={() => handleStatusChange('TODO')}
+                  >
+                    <AssignmentIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </>
+          )}
+        </Box>
+        
+        <Box>
+          {onEdit && (
+            <Tooltip title="Edit Task">
+              <IconButton size="small" onClick={() => onEdit(task)} aria-label="edit">
+                <EditIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+          {onDelete && (
+            <Tooltip title="Delete Task">
+              <IconButton size="small" onClick={() => onDelete(task.id)} aria-label="delete">
+                <DeleteIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
       </CardActions>
     </Card>
   );

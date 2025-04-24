@@ -14,11 +14,24 @@ import {
   CircularProgress,
   Alert,
   Pagination,
-  Paper
+  Paper,
+  Chip,
+  IconButton,
+  Autocomplete,
+  Tooltip,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
+import { 
+  FilterAlt as FilterIcon,
+  DateRange as DateIcon,
+  Label as LabelIcon,
+  Close as CloseIcon 
+} from '@mui/icons-material';
 import TaskCard from './TaskCard';
 import { Task, StatusLabels, PriorityLabels } from '@/types/task';
 import { useCategories } from '@/contexts/CategoryContext';
+import { format, isToday, isTomorrow, isThisWeek, addDays } from 'date-fns';
 import useSWR from 'swr';
 
 // Fetcher function for SWR
@@ -30,6 +43,9 @@ const fetcher = async (url: string) => {
   return res.json();
 };
 
+// Due date filter options
+type DueDateFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'overdue' | 'none';
+
 export default function TaskList() {
   // Get categories from context
   const { categories, getCategoryColor } = useCategories();
@@ -38,9 +54,31 @@ export default function TaskList() {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [priorityFilter, setPriorityFilter] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [dueDateFilter, setDueDateFilter] = useState<DueDateFilter>('all');
+  const [tagFilter, setTagFilter] = useState<string>('');
+  const [showCompletedTasks, setShowCompletedTasks] = useState(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [page, setPage] = useState(1);
   const tasksPerPage = 5;
+  
+  // State to track all available tags
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+
+  // Extract all unique tags from tasks
+  useEffect(() => {
+    if (data) {
+      const allTags = new Set<string>();
+      data.forEach(task => {
+        if (task.tags) {
+          task.tags.split(',')
+            .map(tag => tag.trim())
+            .filter(tag => tag)
+            .forEach(tag => allTags.add(tag));
+        }
+      });
+      setAvailableTags(Array.from(allTags));
+    }
+  }, [data]);
 
   // Construct the API URL with filters
   const getApiUrl = () => {
@@ -84,9 +122,34 @@ export default function TaskList() {
     setPage(1); // Reset to first page when filter changes
   };
 
+  const handleDueDateFilterChange = (event: SelectChangeEvent) => {
+    setDueDateFilter(event.target.value as DueDateFilter);
+    setPage(1); // Reset to first page when filter changes
+  };
+
+  const handleTagFilterChange = (event: React.SyntheticEvent, value: string | null) => {
+    setTagFilter(value || '');
+    setPage(1); // Reset to first page when filter changes
+  };
+
+  const handleCompletedTasksChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setShowCompletedTasks(event.target.checked);
+    setPage(1); // Reset to first page when filter changes
+  };
+
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);
     setPage(1); // Reset to first page when search changes
+  };
+
+  const clearAllFilters = () => {
+    setStatusFilter('');
+    setPriorityFilter('');
+    setCategoryFilter('');
+    setDueDateFilter('all');
+    setTagFilter('');
+    setSearchTerm('');
+    setPage(1);
   };
 
   // Handle task status change
@@ -131,7 +194,7 @@ export default function TaskList() {
     }
   };
 
-  // Filter tasks by search term and category
+  // Filter tasks based on all criteria
   const filteredTasks = data
     ? data.filter((task) => {
         // Text search filter
@@ -139,11 +202,54 @@ export default function TaskList() {
           task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
           (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
           (task.category && task.category.toLowerCase().includes(searchTerm.toLowerCase()));
-          
+        
         // Category filter
         const matchesCategory = !categoryFilter || task.category === categoryFilter;
         
-        return matchesSearch && matchesCategory;
+        // Completed tasks filter
+        const matchesCompleted = showCompletedTasks || task.status !== 'DONE';
+        
+        // Tag filter
+        const matchesTag = !tagFilter || (
+          task.tags && 
+          task.tags.split(',')
+            .map(tag => tag.trim())
+            .includes(tagFilter)
+        );
+        
+        // Due date filter
+        let matchesDueDate = true;
+        
+        if (dueDateFilter !== 'all' && task.dueDate) {
+          const dueDate = new Date(task.dueDate);
+          const today = new Date();
+          
+          switch (dueDateFilter) {
+            case 'today':
+              matchesDueDate = isToday(dueDate);
+              break;
+            case 'tomorrow':
+              matchesDueDate = isTomorrow(dueDate);
+              break;
+            case 'week':
+              matchesDueDate = isThisWeek(dueDate, { weekStartsOn: 1 });
+              break;
+            case 'overdue':
+              matchesDueDate = dueDate < today && !isToday(dueDate);
+              break;
+            case 'none':
+              matchesDueDate = !task.dueDate;
+              break;
+          }
+        } else if (dueDateFilter === 'none') {
+          matchesDueDate = !task.dueDate;
+        }
+        
+        return matchesSearch && 
+               matchesCategory && 
+               matchesCompleted &&
+               matchesTag &&
+               matchesDueDate;
       })
     : [];
 
@@ -157,6 +263,15 @@ export default function TaskList() {
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
     setPage(value);
   };
+
+  // Active filters count
+  const activeFiltersCount = [
+    statusFilter, 
+    priorityFilter, 
+    categoryFilter, 
+    tagFilter, 
+    dueDateFilter !== 'all'
+  ].filter(Boolean).length;
 
   return (
     <Box>
@@ -177,9 +292,35 @@ export default function TaskList() {
             />
           </Grid>
           <Grid item xs={12} md={6}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', gap: 1, flexGrow: 1 }}>
+                <Tooltip title="Active filters">
+                  <Chip 
+                    icon={<FilterIcon />} 
+                    label={`${activeFiltersCount} filter${activeFiltersCount !== 1 ? 's' : ''}`}
+                    color={activeFiltersCount > 0 ? "primary" : "default"}
+                    onClick={clearAllFilters}
+                    onDelete={activeFiltersCount > 0 ? clearAllFilters : undefined}
+                    sx={{ mr: 1 }}
+                  />
+                </Tooltip>
+                <FormControlLabel
+                  control={
+                    <Switch 
+                      checked={showCompletedTasks} 
+                      onChange={handleCompletedTasksChange} 
+                    />
+                  }
+                  label="Show completed"
+                />
+              </Box>
+            </Box>
+          </Grid>
+          
+          <Grid item xs={12}>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
-                <FormControl fullWidth>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth size="small">
                   <InputLabel>Status</InputLabel>
                   <Select
                     value={statusFilter}
@@ -193,8 +334,8 @@ export default function TaskList() {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={4}>
-                <FormControl fullWidth>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth size="small">
                   <InputLabel>Priority</InputLabel>
                   <Select
                     value={priorityFilter}
@@ -208,8 +349,8 @@ export default function TaskList() {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={4}>
-                <FormControl fullWidth>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth size="small">
                   <InputLabel>Category</InputLabel>
                   <Select
                     value={categoryFilter}
@@ -237,6 +378,48 @@ export default function TaskList() {
                     ))}
                   </Select>
                 </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Due Date</InputLabel>
+                  <Select
+                    value={dueDateFilter}
+                    onChange={handleDueDateFilterChange}
+                    label="Due Date"
+                    startAdornment={<DateIcon sx={{ ml: 1, mr: 0.5, color: 'action.active' }} fontSize="small" />}
+                  >
+                    <MenuItem value="all">All Due Dates</MenuItem>
+                    <MenuItem value="today">Due Today</MenuItem>
+                    <MenuItem value="tomorrow">Due Tomorrow</MenuItem>
+                    <MenuItem value="week">Due This Week</MenuItem>
+                    <MenuItem value="overdue">Overdue</MenuItem>
+                    <MenuItem value="none">No Due Date</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <Autocomplete
+                  options={availableTags}
+                  value={tagFilter || null}
+                  onChange={handleTagFilterChange}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="Filter by Tag" 
+                      size="small"
+                      fullWidth
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <>
+                            <LabelIcon sx={{ ml: 1, mr: 0.5, color: 'action.active' }} fontSize="small" />
+                            {params.InputProps.startAdornment}
+                          </>
+                        )
+                      }}
+                    />
+                  )}
+                />
               </Grid>
             </Grid>
           </Grid>
@@ -272,12 +455,14 @@ export default function TaskList() {
       ))}
 
       {pageCount > 1 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, mb: 4 }}>
           <Pagination
             count={pageCount}
             page={page}
             onChange={handlePageChange}
             color="primary"
+            showFirstButton
+            showLastButton
           />
         </Box>
       )}
