@@ -1,36 +1,83 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📝 Task Tracker
 
-## Getting Started
+A responsive, single-user task tracking application that helps you organize and manage your tasks efficiently!
 
-First, run the development server:
+## 🌟 Features
+
+- ✅ Complete task management with CRUD operations
+- 🏷️ Task categorization and filtering
+- 🔥 Priority levels and status tracking
+- 📅 Due date management with optional reminders
+- 📱 Responsive design for all devices
+- 🌓 Dark/light mode support
+
+## 🚀 Tech Stack
+
+- **Frontend**: Next.js 14 with App Router, TypeScript, Material UI v5
+- **Backend**: Next.js API Routes
+- **Database**: SQLite with Prisma ORM
+- **State Management**: React Context API + SWR for data fetching
+- **Styling**: Material UI with custom theming
+- **Deployment**: Vercel (recommended)
+
+## 🛠️ Getting Started
+
+First, install the dependencies:
+
+```bash
+npm install
+# or
+yarn install
+```
+
+Next, set up the database:
+
+```bash
+# Initialize Prisma with SQLite (if not already done)
+npx prisma init --datasource-provider sqlite
+
+# Create database and generate Prisma client
+npx prisma migrate dev --name init
+```
+
+Then, run the development server:
 
 ```bash
 npm run dev
 # or
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📊 Project Status
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### What Works
+- ✅ Project initialization with Next.js and TypeScript
+- ✅ Material UI setup with initial theme configuration
+- ✅ Database schema defined in Prisma
+- ✅ Project structure established
+- ✅ Prisma client singleton created
 
-## Learn More
+### What's Next
+- 🔄 API routes for CRUD operations
+- 🔄 Task list UI components
+- 🔄 Task creation and edit forms
+- 🔄 Filtering and sorting capabilities
+- 🔄 Task status management
+- 🔄 Category management
+- 🔄 Priority level implementation
+- 🔄 Due date tracking
+- 🔄 Dark/light mode toggle
+- 🔄 Responsive design adjustments
 
-To learn more about Next.js, take a look at the following resources:
+## 📚 Learn More
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Material UI Documentation](https://mui.com/getting-started/usage/)
+- [Prisma Documentation](https://www.prisma.io/docs/)
+- [SWR Documentation](https://swr.vercel.app/)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 📦 Deployment
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The easiest way to deploy your Task Tracker app is to use the [Vercel Platform](https://vercel.com/new) from the creators of Next.js.
